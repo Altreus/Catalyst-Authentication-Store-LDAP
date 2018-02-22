@@ -47,6 +47,10 @@ subtest "persist_in_session 'all'" => sub {
             user_field          => 'uid',
             use_roles           => 0,
             persist_in_session  => 'all',
+            simplecrypto => {
+                key_string => 'xvDGyATGLcneIuCKs7dA/Mr9Eg6LT5lA7py6FKppwpA=',
+                deterministic_salt_string => 'X9wdSJc7OQ6yjyIv2nTrCqXjpG3PTogqp5IOLY1nJkY=',
+            },
         }
     );
     my $user = $back->find_user( { username => 'somebody' } );
@@ -56,6 +60,7 @@ subtest "persist_in_session 'all'" => sub {
             persist_in_session => 'all',
             user => $user->user,
             _roles => [],
+            password => undef,
         },
         "for_session returns correct data");
     ok($back->from_session($c, $hash_session_value), 'from_session ok');

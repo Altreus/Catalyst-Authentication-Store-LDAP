@@ -51,6 +51,10 @@ Catalyst::Authentication::Store::LDAP::Backend
             },
             'role_search_as_user' => 0,
             'persist_in_session'  => 'all',
+            'simplecrypto' => {
+                'key_string' => ...,
+                'deterministic_salt_string' => ...,
+            },
     );
 
     our $users = Catalyst::Authentication::Store::LDAP::Backend->new(\%config);
@@ -80,6 +84,7 @@ use Catalyst::Authentication::Store::LDAP::User;
 use Net::LDAP;
 use Catalyst::Utils ();
 use Catalyst::Exception;
+use OpusVL::SimpleCrypto;
 
 BEGIN {
     __PACKAGE__->mk_accessors(
@@ -90,7 +95,7 @@ BEGIN {
             role_filter role_scope role_field role_value
             role_search_options start_tls start_tls_options
             user_results_filter user_class role_search_as_user
-            persist_in_session
+            persist_in_session crypto
             )
     );
 }
@@ -113,6 +118,11 @@ sub new {
             "Catalyst::Authentication::Store::LDAP::Backend needs to be configured with a hashref."
         );
     }
+
+    if ($config->{simplecrypto}) {
+        $config->{'crypto'} = OpusVL::SimpleCrypto->new(delete $config->{simplecrypto});
+    }
+
     my %config_hash = %{$config};
     $config_hash{'binddn'}      ||= 'anonymous';
     $config_hash{'user_filter'} ||= '(uid=%s)';
@@ -146,6 +156,14 @@ given User out of the Store.
 
 I<authinfo> should be a hashref with a key of either C<id> or
 C<username>. The value will be compared against the LDAP C<user_field> field.
+
+Note that a user object created this way cannot be used with
+L<Catalyst::Authentication::Store::LDAP::User/ldap_connection> because we do not
+have the password.
+
+The entrypoint for creating a user whose password is known is
+L<Catalyst::Authentication::Store::LDAP::User/check_password> - part of the auth
+mechanism.
 
 =cut
 
@@ -465,13 +483,59 @@ sub from_session {
     # user in the session store which might differ from what
     # persist_in_session is set to now
     if ( ref $frozenuser eq 'HASH' ) {
-        # we can rely on the existance of this key if the user is a hashref
+        # we can rely on the existence of this key if the user is a hashref
         if ( $frozenuser->{persist_in_session} eq 'all' ) {
-            return $self->user_class->new( $self, $frozenuser->{user}, $c, $frozenuser->{_roles} );
+            return $self->user_class->new( $self, $frozenuser->{user}, $c, $frozenuser->{_roles}, $frozenuser->{password} );
         }
     }
 
     return $self->get_user( $frozenuser, $c );
+}
+
+=head2 encrypt( $password )
+
+If crypto is set up, encrypt the password. If not, return nothing.
+
+=cut
+
+sub encrypt {
+    my $self = shift;
+    my $password = shift;
+
+    if ($self->crypto) {
+        return $self->crypto->encrypt($password);
+    }
+
+    return;
+}
+
+=head2 decrypt( $password )
+
+If crypto is set up, decrypt the pasword. If not, return nothing and raise a
+warning. (We raise a warning because you probably called
+L<Catalyst::Authentication::Store::LDAP::User/ldap_connection>)
+
+If crypto is set up wrong, decryption will fail. This may happen if the session
+has persisted from a previous process, but the encryption keys have changed. In
+this case we throw an exception.
+
+=cut
+
+sub decrypt {
+    my $self = shift;
+    my $encrypted = shift;
+
+    if ($self->crypto) {
+        my $decrypted = $self->crypto->decrypt($encrypted);
+
+        die "Password could not be decrypted" if not defined $decrypted;
+
+        return $decrypted;
+    }
+    else {
+        warn "Attempting to decrypt with no crypto set up!";
+        return;
+    }
 }
 
 1;

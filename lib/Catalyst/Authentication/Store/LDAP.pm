@@ -69,6 +69,10 @@ Catalyst::Authentication::Store::LDAP
                },
                user_results_filter => sub { return shift->pop_entry },
                persist_in_session  => 'all',
+               simplecrypto => {
+                 key_string => ...,
+                 deterministic_salt_string => ...,
+               },
              },
            },
          },
@@ -347,6 +351,21 @@ exist and is expected to be a subclass of Net::LDAP::Entry
 
 The name of the class of user object returned. By default, this is
 L<Catalyst::Authentication::Store::LDAP::User>.
+
+=head2 simplecrypto
+
+If you want to be able to connect to the LDAP server as a user, we must store
+the password in the session. This is because we have to provide the same
+credentials for each LDAP request, and if you got those credentials from the
+user, we need to keep hold of them.
+
+That means we need to encrypt the password. This is done with L<OpusVL::SimpleCrypto>.
+
+If you provide the same properties that L<OpusVL::SimpleCrypto> uses, we will
+construct such an object, and you will be able to use
+L<Catalyst::Authentication::Store::LDAP::User/ldap_connection>.
+
+If you don't, you won't.
 
 =head1 METHODS
 

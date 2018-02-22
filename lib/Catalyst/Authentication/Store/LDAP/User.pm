@@ -53,12 +53,9 @@ use Net::LDAP::Entry;
 
 our $VERSION = '1.016';
 
-BEGIN { __PACKAGE__->mk_accessors(qw/user store/) }
+BEGIN { __PACKAGE__->mk_accessors(qw/user store password/) }
 
 use overload '""' => sub { shift->stringify }, fallback => 1;
-
-my %_ldap_connection_passwords; # Store inside-out so that they don't show up
-                                # in dumps..
 
 =head1 METHODS
 
@@ -75,11 +72,16 @@ Returns a L<Catalyst::Authentication::Store::LDAP::User> object.
 =cut
 
 sub new {
-    my ( $class, $store, $user, $c, $roles ) = @_;
+    my ( $class, $store, $user, $c, $roles, $password ) = @_;
 
     return unless $user;
 
-    bless { store => $store, user => $user, _roles => $roles }, $class;
+    bless {
+        store => $store,
+        user => $user,
+        roles => $roles,
+       (password => $password) x !!$password
+    }, $class;
 }
 
 =head2 id
@@ -137,13 +139,16 @@ Bind's to the directory as the DN of the internal L<Net::LDAP::Entry> object,
 using the bind password supplied in $password.  Returns 1 on a successful
 bind, 0 on failure.
 
+This stores an encrypted version of the password on the objecct (and thus later
+in the session) if the store has crypto set up on it.
+
 =cut
 
 sub check_password {
     my ( $self, $password ) = @_;
     if ( $self->store->ldap_auth($self->ldap_entry->dn, $password) ) {
         # Stash a closure which can be used to retrieve the connection in the users context later.
-        $_ldap_connection_passwords{refaddr($self)} = $password;
+        $self->password( $self->store->encrypt($password) );
         return 1;
     }
     else {
@@ -184,6 +189,7 @@ sub for_session {
             persist_in_session  => $self->store->persist_in_session,
             user                => $self->user,
             _roles              => [ $self->roles ],
+            password            => $self->password,
         };
     }
 
@@ -268,12 +274,21 @@ sub get_object { return shift->user }
 Re-binds to the auth store with the credentials of the user you logged in
 as, and returns a L<Net::LDAP> object which you can use to do further queries.
 
+For this to be supported you will have to provide the C<simplecrypto>
+configuration to L<Catalyst::Authentication::Store::LDAP>.
+
 =cut
 
 sub ldap_connection {
     my $self = shift;
+
+    # FIXME: if we're doing unauthenticated binds does this still get called?
+    die "Attempted to use encrypted password with no crypto set up"
+        if $self->password and not $self->store->crypto;
+
     $self->store->ldap_bind( undef, $self->ldap_entry->dn,
-        $_ldap_connection_passwords{refaddr($self)} );
+        $self->store->crypto->decrypt( $self->password )
+    );
 }
 
 =head2 AUTOLOADed methods
@@ -314,12 +329,6 @@ value of user_field (uid by default.)
     $c->user->username == $c->user->uid
 
 =cut
-
-sub DESTROY {
-    my $self = shift;
-    # Don't leak passwords..
-    delete $_ldap_connection_passwords{refaddr($self)};
-}
 
 sub can {
     my ($self, $method) = @_;

@@ -68,6 +68,10 @@ for my $i (0..1) {
         'role_field'  => 'userinrole',
         'role_value'  => 'cn',
         'role_search_as_user' => $i,
+        simplecrypto => {
+            key_string => 'xvDGyATGLcneIuCKs7dA/Mr9Eg6LT5lA7py6FKppwpA=',
+            deterministic_salt_string => 'X9wdSJc7OQ6yjyIv2nTrCqXjpG3PTogqp5IOLY1nJkY=',
+        },
     });
     $back = Test::MockObject::Extends->new($back);
     my $bind_msg = Test::MockObject->new;

@@ -44,6 +44,10 @@ SYNOPSIS
                    },
                    user_results_filter => sub { return shift->pop_entry },
                    persist_in_session  => 'all',
+                   simplecrypto => {
+                     key_string => ...,
+                     deterministic_salt_string => ...,
+                   },
                  },
                },
              },
@@ -287,8 +291,8 @@ CONFIGURATION OPTIONS
         up in the store after login.
 
         NOTE: It's recommended to limit the user attributes fetched from
-        LDAP using user_search_options / attrs to not exhaust the session
-        store.
+        LDAP using "user_search_options" / "attrs" to not exhaust the
+        session store.
 
   entry_class
     The name of the class of LDAP entries returned. This class should exist
@@ -297,6 +301,21 @@ CONFIGURATION OPTIONS
   user_class
     The name of the class of user object returned. By default, this is
     Catalyst::Authentication::Store::LDAP::User.
+
+  simplecrypto
+    If you want to be able to connect to the LDAP server as a user, we must
+    store the password in the session. This is because we have to provide
+    the same credentials for each LDAP request, and if you got those
+    credentials from the user, we need to keep hold of them.
+
+    That means we need to encrypt the password. This is done with
+    OpusVL::SimpleCrypto.
+
+    If you provide the same properties that OpusVL::SimpleCrypto uses, we
+    will construct such an object, and you will be able to use
+    "ldap_connection" in Catalyst::Authentication::Store::LDAP::User.
+
+    If you don't, you won't.
 
 METHODS
   new

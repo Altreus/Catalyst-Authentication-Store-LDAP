@@ -7,6 +7,7 @@ version_from('lib/Catalyst/Authentication/Store/LDAP.pm');
 license('perl');
 
 requires('Net::LDAP');
+requires('OpusVL::SimpleCrypto');
 requires( 'Catalyst::Plugin::Authentication' => '0.10003' );
 
 #requires('Catalyst::Model::LDAP');
